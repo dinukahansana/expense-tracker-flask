@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+</head>
+<body>
+    <h1>Expenses Tracker</h1>
+
+    <a href="/add">Add Expenses</a>
+
+    <ul>
+        {%for expense in expenses%}
+            <li>
+                {{expense[1]}} - Rs. {{expense[2]}}
+                <form action="/delete/{{expense[0]}}" method="post" style="display:inline;">
+                    <button 
+                        type="submit"
+                        onclick="return confirm('Are you sure your want to delete this expense?')">
+                        Delete
+                    </button>
+                </form>             
+            </li>
+        {% endfor %}
+    </ul>
+
+    <h3>Total Spends: Rs.{{ total }}</h3>
+</body>
+</html>

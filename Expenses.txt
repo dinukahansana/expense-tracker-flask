@@ -1,0 +1,4 @@
+Food,1000
+Electricity Bill,2000
+Internet Bill,3000
+Water Bill,5000
