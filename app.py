@@ -24,10 +24,27 @@ def init_db():
 # Home Page - Show Expenses
 @app.route('/')
 def index():
+
+    search = request.args.get('search','')
+    category = request.args.get('category','')
+
     conn = sqlite3.connect('expenses.db')
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM expenses")
+    #cursor.execute("SELECT * FROM expenses")
+
+    query = "SELECT * FROM expenses WHERE 1=1"
+    params = []
+
+    if search:
+        query += " AND name LIKE ?"
+        params.append(f"%{search}%")
+
+    if category:
+        query += " AND category = ?"
+        params.append(category)
+    
+    cursor.execute(query, params)
     expenses = cursor.fetchall()
 
     total = sum(expense[3] for expense in expenses)
@@ -37,7 +54,9 @@ def index():
     return render_template(
         "index.html",
         expenses=expenses,
-        total=total
+        total=total,
+        search=search,
+        category=category
     )
 
 
