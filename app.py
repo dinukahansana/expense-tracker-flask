@@ -30,7 +30,7 @@ def index():
     cursor.execute("SELECT * FROM expenses")
     expenses = cursor.fetchall()
 
-    total = sum(expense[2] for expense in expenses)
+    total = sum(expense[3] for expense in expenses)
 
     conn.close()
 
@@ -48,12 +48,13 @@ def add():
 
         name = request.form.get('name', '').strip()
         amount = request.form.get('amount', '').strip()
+        category = request.form.get('category', '').strip()
 
         # name = request.form['name']
         # amount = request.form['amount']
 
         # Validation
-        if not name or not amount:
+        if not name or not amount or not category:
             return "Please fill in all fields."
 
         try:
@@ -65,8 +66,8 @@ def add():
         cursor = conn.cursor()
 
         cursor.execute(
-            "INSERT INTO expenses (name, amount) VALUES (?, ?)",
-            (name, amount)
+            "INSERT INTO expenses (name, amount, category) VALUES (?, ?, ?)",
+            (name, amount, category)
         )
 
         conn.commit()
