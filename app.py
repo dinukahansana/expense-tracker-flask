@@ -49,6 +49,18 @@ def index():
 
     total = sum(expense[3] for expense in expenses)
 
+    # Category totals for Pie Chart
+    cursor.execute("""
+        SELECT category, SUM(amount)
+        FROM expenses
+        GROUP BY category
+    """)
+
+    category_data = cursor.fetchall()
+
+    labels = [row[0] for row in category_data]
+    amounts = [row[1] for row in category_data]
+
     conn.close()
 
     return render_template(
@@ -56,7 +68,10 @@ def index():
         expenses=expenses,
         total=total,
         search=search,
-        category=category
+        category=category,
+        category_data=category_data,
+        labels=labels,
+        amounts=amounts
     )
 
 
@@ -69,10 +84,6 @@ def add():
         amount = request.form.get('amount', '').strip()
         category = request.form.get('category', '').strip()
 
-        # name = request.form['name']
-        # amount = request.form['amount']
-
-        # Validation
         if not name or not amount or not category:
             return "Please fill in all fields."
 
@@ -85,15 +96,14 @@ def add():
         cursor = conn.cursor()
 
         cursor.execute(
-            "INSERT INTO expenses (name, amount, category) VALUES (?, ?, ?)",
-            (name, amount, category)
+            "INSERT INTO expenses (name, category, amount) VALUES (?, ?, ?)",
+            (name, category, amount)
         )
 
         conn.commit()
         conn.close()
 
-        
-        return render_template("add.html")
+        return redirect('/')
 
     return render_template("add.html")
 
