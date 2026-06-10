@@ -12,6 +12,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
+            category TEXT NOT NULL,
             amount REAL NOT NULL
         )
     ''')
@@ -91,6 +92,42 @@ def delete(id):
     conn.close()
 
     return redirect('/')
+
+#Edit Expenses
+@app.route('/edit/<int:id>', methods=['GET','POST'])
+def edit(id):
+    conn = sqlite3.connect('expenses.db')
+    cursor = conn.cursor()
+
+    if request.method == 'POST':
+        name = request.form['name']
+        category = request.form['category']
+        amount = request.form['amount']
+
+        cursor.execute(
+            '''
+            UPDATE expenses
+            SET name=?, category=?, amount=?
+            WHERE id=?
+            ''',
+            (name, category, amount, id)
+        )
+
+        conn.commit()
+        conn.close()
+
+        return redirect('/')
+    
+    cursor.execute(
+        "SELECT * FROM expenses WHERE id=?",
+        (id,)
+    )
+
+    expense = cursor.fetchone()
+
+    conn.close()
+
+    return render_template('edit.html', expense=expense)
 
 
 if __name__ == '__main__':
