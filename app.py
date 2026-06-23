@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, session
 import sqlite3
 
 app = Flask(__name__)
+app.secret_key = 'my_secret_key'
 
 # Create Database
 def init_db():
@@ -33,8 +34,8 @@ def index():
 
     #cursor.execute("SELECT * FROM expenses")
 
-    query = "SELECT * FROM expenses WHERE 1=1"
-    params = []
+    query = "SELECT * FROM expenses WHERE user_id = ?"
+    params = [session['user_id']]
 
     if search:
         query += " AND name LIKE ?"
@@ -53,8 +54,11 @@ def index():
     cursor.execute("""
         SELECT category, SUM(amount)
         FROM expenses
+        WHERE user_id = ?
         GROUP BY category
-    """)
+        """,
+        (session['user_id'],)
+        )
 
     category_data = cursor.fetchall()
 
@@ -96,8 +100,8 @@ def add():
         cursor = conn.cursor()
 
         cursor.execute(
-            "INSERT INTO expenses (name, category, amount) VALUES (?, ?, ?)",
-            (name, category, amount)
+            "INSERT INTO expenses (name, category, amount, user_id) VALUES (?, ?, ?, ?)",
+            (name, category, amount, session['user_id'])
         )
 
         conn.commit()
@@ -114,8 +118,8 @@ def delete(id):
     cursor = conn.cursor()
 
     cursor.execute(
-        "DELETE FROM expenses WHERE id = ?",
-        (id,)
+        "DELETE FROM expenses WHERE id = ? AND user_id = ?",
+        (id, session['user_id'])
     )
 
     conn.commit()
@@ -149,8 +153,8 @@ def edit(id):
         return redirect('/')
     
     cursor.execute(
-        "SELECT * FROM expenses WHERE id=?",
-        (id,)
+        "SELECT * FROM expenses WHERE id=? AND user_id = ?",
+        (id, session['user_id'])
     )
 
     expense = cursor.fetchone()
@@ -159,6 +163,7 @@ def edit(id):
 
     return render_template('edit.html', expense=expense)
 
+#Implement Register
 @app.route('/register', methods=['GET','POST'])
 def register():
     if request.method == 'POST':
@@ -179,11 +184,45 @@ def register():
 
         except sqlite3.IntegrityError:
             conn.close()
-            return "Usernae Already Exists !"
+            return "Username Already Exists !"
         
         conn.close()
         return redirect("/login")
     return render_template('register.html')
+
+#Implement Login
+@app.route('/login', methods=['GET','POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username','').strip()
+        password = request.form.get('password','').strip()
+
+        conn = sqlite3.connect('expenses.db')
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT *
+            FROM users
+            WHERE username = ? AND password = ?          
+            ''',
+            (username,password)
+            )
+        
+        user = cursor.fetchone()
+
+        if user:
+            session['user_id'] = user[0]
+            session['username'] = user[1]
+
+            return redirect('/')
+        return "Invalid username or password!"
+    return render_template('login.html')
+
+#Logout
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect('/login')
 
 
 if __name__ == '__main__':

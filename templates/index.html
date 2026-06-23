@@ -18,7 +18,24 @@
     <div class="card shadow-lg">
 
         <div class="card-header bg-primary text-white">
-            <h2>💰 Expense Tracker Dashboard</h2>
+            <div class="d-flex justify-content-between align-items-center">
+
+                <h2>💰 Expense Tracker Dashboard</h2>
+
+                <div>
+
+                    Welcome, {{ session['username'] }}
+
+                    <a href="/logout"
+                    class="btn btn-danger btn-sm ms-2">
+
+                        Logout
+
+                    </a>
+
+                </div>
+
+            </div>
         </div>
 
         <div class="card-body">
