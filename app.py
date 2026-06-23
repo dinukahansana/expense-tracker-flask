@@ -159,6 +159,32 @@ def edit(id):
 
     return render_template('edit.html', expense=expense)
 
+@app.route('/register', methods=['GET','POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if not username or not password:
+            return "Please fill all fields"
+        
+        conn = sqlite3.connect('expenses.db')
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("INSERT INTO users (username, password) VALUES (?,?)",
+                        (username, password))
+            
+            conn.commit()
+
+        except sqlite3.IntegrityError:
+            conn.close()
+            return "Usernae Already Exists !"
+        
+        conn.close()
+        return redirect("/login")
+    return render_template('register.html')
+
 
 if __name__ == '__main__':
     init_db()
