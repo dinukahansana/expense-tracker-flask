@@ -1,4 +1,6 @@
 from flask import Flask, render_template, request, redirect, session
+from werkzeug.security import generate_password_hash, check_password_hash
+
 import sqlite3
 
 app = Flask(__name__)
@@ -25,6 +27,9 @@ def init_db():
 # Home Page - Show Expenses
 @app.route('/')
 def index():
+
+    if 'user_id' not in session:
+        return redirect('/login')
 
     search = request.args.get('search','')
     category = request.args.get('category','')
@@ -177,8 +182,9 @@ def register():
         cursor = conn.cursor()
 
         try:
+            hash_password = generate_password_hash(password)
             cursor.execute("INSERT INTO users (username, password) VALUES (?,?)",
-                        (username, password))
+                        (username, hash_password))
             
             conn.commit()
 
@@ -203,14 +209,14 @@ def login():
         cursor.execute('''
             SELECT *
             FROM users
-            WHERE username = ? AND password = ?          
+            WHERE username = ?          
             ''',
-            (username,password)
+            (username,)
             )
         
         user = cursor.fetchone()
 
-        if user:
+        if user and check_password_hash(user[2],password):
             session['user_id'] = user[0]
             session['username'] = user[1]
 
