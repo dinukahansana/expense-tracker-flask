@@ -1,10 +1,12 @@
 from flask import Flask, render_template, request, redirect, session
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import timedelta
 
 import sqlite3
 
 app = Flask(__name__)
-app.secret_key = 'my_secret_key'
+app.secret_key = 'your_secret_key'
+app.permanent_session_lifetime = timedelta(days=30)
 
 # Create Database
 def init_db():
@@ -202,6 +204,8 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username','').strip()
         password = request.form.get('password','').strip()
+        
+        remember = request.form.get('remember')
 
         conn = sqlite3.connect('expenses.db')
         cursor = conn.cursor()
@@ -217,6 +221,11 @@ def login():
         user = cursor.fetchone()
 
         if user and check_password_hash(user[2],password):
+            if remember:
+                session.permanent = True
+            else:
+                session.permanent = False
+
             session['user_id'] = user[0]
             session['username'] = user[1]
 
@@ -229,6 +238,51 @@ def login():
 def logout():
     session.clear()
     return redirect('/login')
+
+#Forgot Password
+@app.route('/forgot-password', methods=['GET','POST'])
+def forgot_password():
+    if request.method == 'POST':
+        username = request.form.get('username','').strip()
+        new_password = request.form.get('new_password','').strip()
+        confirm_password = request.form.get('confirm_password','').strip()
+
+        if not username or not new_password or not confirm_password:
+            return "Please fill in all fields !"
+
+        if new_password != confirm_password:
+            return "Password do not match !"
+        
+        conn = sqlite3.connect('expenses.db')
+        cursor = conn.cursor()
+
+        cursor.execute(
+            '''
+            SELECT * FROM users WHERE username = ?
+            ''',
+            (username,)
+        )
+
+        user = cursor.fetchone()
+
+        if not user:
+            conn.close()
+            return "Username not found !"
+        
+        hashed_password = generate_password_hash(new_password)
+
+        cursor.execute(
+            '''
+            UPDATE users SET password=? WHERE username=?
+            ''',
+            (hashed_password, username)
+        )
+
+        conn.commit()
+        conn.close()
+
+        return redirect('/login')
+    return render_template("forgot_password.html")
 
 
 if __name__ == '__main__':
