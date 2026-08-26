@@ -57,6 +57,8 @@ def index():
 
     total = sum(expense[3] for expense in expenses)
 
+    total = sum(expense[3] for expense in expenses)
+
     # Category totals for Pie Chart
     cursor.execute("""
         SELECT category, SUM(amount)
@@ -68,6 +70,14 @@ def index():
         )
 
     category_data = cursor.fetchall()
+
+    expense_count = len(expenses)
+    category_count = len(category_data)
+    
+    highest_expense = max(
+        [expense[3] for expense in expenses],
+        default=0
+    )
 
     labels = [row[0] for row in category_data]
     amounts = [row[1] for row in category_data]
@@ -82,7 +92,10 @@ def index():
         category=category,
         category_data=category_data,
         labels=labels,
-        amounts=amounts
+        amounts=amounts,
+        expense_count=expense_count,
+        category_count=category_count,
+        highest_expense=highest_expense,
     )
 
 
