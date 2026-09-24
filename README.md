@@ -9,12 +9,12 @@ cd 'D:\D I N U K A\Learning\PYTHON PROJECTS\ExpenseTracker_WEB-APP'
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-$env:FLASK_SECRET_KEY = python -c "import secrets; print(secrets.token_urlsafe(48))"
+[Environment]::SetEnvironmentVariable('FLASK_SECRET_KEY', (python -c "import secrets; print(secrets.token_urlsafe(48))"), 'User')
 python setup_db.py
 python app.py
 ```
 
-Save `FLASK_SECRET_KEY` in your deployment secret store so sessions survive restarts. It must have at least 32 characters. Never commit it. The app refuses to start without it or without a migrated database. The development server runs with debug mode off; use a production WSGI server for deployment.
+Run the secret-key command only once per Windows user account; if you already set it, skip that line. The app reads the saved Windows user variable even from a terminal opened before it was set. On other systems, configure `FLASK_SECRET_KEY` in the process environment. Save it in your deployment secret store so sessions survive restarts. It must have at least 32 characters. Never commit it. The app refuses to start without it or without a migrated database. The development server runs with debug mode off; use a production WSGI server for deployment.
 
 Environment variables:
 

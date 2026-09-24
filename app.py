@@ -32,6 +32,23 @@ SORTS = {
 PAGE_SIZE = 20
 
 
+def _saved_windows_secret_key():
+    """Read a persisted user variable when an already-open terminal has stale env."""
+    if os.name != "nt":
+        return None
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as user_env:
+            value, _ = winreg.QueryValueEx(user_env, "FLASK_SECRET_KEY")
+        return value if isinstance(value, str) else None
+    except OSError:
+        return None
+
+
+def configured_secret_key():
+    return os.environ.get("FLASK_SECRET_KEY") or _saved_windows_secret_key()
+
+
 def money(cents):
     return f"{cents // 100:,}.{cents % 100:02d}"
 
@@ -185,7 +202,7 @@ def _login_key(username):
 def create_app(test_config=None):
     app = Flask(__name__)
     app.config.update(
-        SECRET_KEY=os.environ.get("FLASK_SECRET_KEY"),
+        SECRET_KEY=configured_secret_key(),
         DATABASE=os.environ.get("EXPENSE_DB_PATH", str(APP_DIR / "expenses.db")),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",

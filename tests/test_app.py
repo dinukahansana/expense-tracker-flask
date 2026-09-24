@@ -1,9 +1,11 @@
 import csv
 from contextlib import closing
 import io
+import os
 import sqlite3
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 from werkzeug.security import generate_password_hash
@@ -50,6 +52,20 @@ class ExpenseTrackerTests(unittest.TestCase):
             self.assertEqual(db.execute("PRAGMA foreign_key_list(expenses)").fetchone()[2], "users")
             self.assertTrue({"users", "expenses", "categories", "budgets"}.issubset({
                 row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}))
+
+    def test_persisted_windows_secret_used_when_process_env_is_stale(self):
+        saved = "saved-user-secret-key-of-at-least-32-characters"
+        with patch.dict(os.environ, {"FLASK_SECRET_KEY": ""}):
+            with patch("app._saved_windows_secret_key", return_value=saved):
+                app = create_app({"TESTING": True, "DATABASE": str(self.path)})
+                self.assertEqual(app.secret_key, saved)
+
+        process = "process-secret-key-of-at-least-32-characters"
+        with patch.dict(os.environ, {"FLASK_SECRET_KEY": process}):
+            with patch("app._saved_windows_secret_key") as saved_reader:
+                app = create_app({"TESTING": True, "DATABASE": str(self.path)})
+                self.assertEqual(app.secret_key, process)
+                saved_reader.assert_not_called()
 
     def test_csrf_and_authentication(self):
         self.assertEqual(self.client.get("/add").status_code, 302)
