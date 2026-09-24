@@ -1,61 +1,64 @@
 {% extends "base.html" %}
 
+{% block title %}Register - Expense Tracker{% endblock %}
+
+{% block page_class %}auth-page{% endblock %}
+
 {% block content %}
 
-<div class="container mt-5">
+<div class="auth-card animate-in">
 
-    <div class="card shadow-lg">
+    <button class="theme-toggle theme-toggle-auth" aria-label="Toggle theme">
+        <i data-lucide="moon" class="icon-moon"></i>
+        <i data-lucide="sun" class="icon-sun"></i>
+    </button>
 
-        <div class="card-header bg-success text-white">
+    <div class="auth-brand">
+        {% include '_brand.html' %}
+    </div>
 
-            <h2>Create Account</h2>
+    <h1 class="auth-title">Create Account</h1>
+    <p class="auth-subtitle">Start tracking your expenses today</p>
 
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+            <label class="form-label" for="reg-username">Username</label>
+            <input
+                type="text"
+                name="username"
+                id="reg-username"
+                class="form-input"
+                value="{{ username }}"
+                placeholder="Choose a username"
+                required
+                autocomplete="username">
+            {% if errors.username %}<p class="field-error" role="alert">{{ errors.username }}</p>{% endif %}
         </div>
 
-        <div class="card-body">
-
-            <form method="POST">
-
-                <div class="mb-3">
-
-                    <label class="form-label">
-                        Username
-                    </label>
-
-                    <input
-                    type="text"
-                    name="username"
-                    class="form-control"
-                    required>
-
-                </div>
-
-                <div class="mb-3">
-
-                    <label class="form-label">
-                        Password
-                    </label>
-
-                    <input
-                    type="password"
-                    name="password"
-                    class="form-control"
-                    required>
-
-                </div>
-
-                <button
-                type="submit"
-                class="btn btn-success">
-
-                    Register
-
-                </button>
-
-            </form>
-
+        <div class="form-group">
+            <label class="form-label" for="reg-password">Password</label>
+            <input
+                type="password"
+                name="password"
+                id="reg-password"
+                class="form-input"
+                placeholder="Create a password"
+                required
+                autocomplete="new-password">
+            <p class="form-hint">Use 12–128 characters with a letter and a number.</p>
+            {% if errors.password %}<p class="field-error" role="alert">{{ errors.password }}</p>{% endif %}
         </div>
 
+        <button type="submit" class="btn btn-primary btn-full">
+            Create Account
+        </button>
+
+    </form>
+
+    <div class="auth-footer">
+        Already have an account? <a href="/login">Sign in</a>
     </div>
 
 </div>

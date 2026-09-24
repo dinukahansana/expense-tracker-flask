@@ -1,95 +1,70 @@
 {% extends "base.html" %}
 
+{% block title %}Login - Expense Tracker{% endblock %}
+
+{% block page_class %}auth-page{% endblock %}
+
 {% block content %}
 
-<div class="container mt-5">
+<div class="auth-card animate-in">
 
-    <div class="card shadow-lg">
+    <button class="theme-toggle theme-toggle-auth" aria-label="Toggle theme">
+        <i data-lucide="moon" class="icon-moon"></i>
+        <i data-lucide="sun" class="icon-sun"></i>
+    </button>
 
-        <div class="card-header bg-primary text-white">
+    <div class="auth-brand">
+        {% include '_brand.html' %}
+    </div>
 
-            <h2>Login</h2>
+    <h1 class="auth-title">Welcome Back</h1>
+    <p class="auth-subtitle">Sign in to continue managing your finances</p>
 
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if error %}<p class="field-error" role="alert">{{ error }}</p>{% endif %}
+
+        <div class="form-group">
+            <label class="form-label" for="login-username">Username</label>
+            <input
+                type="text"
+                name="username"
+                id="login-username"
+                class="form-input"
+                value="{{ username }}"
+                placeholder="Enter your username"
+                required
+                autocomplete="username">
         </div>
 
-        <div class="card-body">
-
-            <form method="POST">
-
-                <div class="mb-3">
-
-                    <label>Username</label>
-
-                    <input
-                    type="text"
-                    name="username"
-                    class="form-control"
-                    required>
-
-                </div>
-
-                <div class="mb-3">
-
-                    <label>Password</label>
-
-                    <input
-                    type="password"
-                    name="password"
-                    class="form-control"
-                    required>
-
-                </div>
-
-                <div class="form-check mb-3">
-
-                    <input
-                        class="form-check-input"
-                        type="checkbox"
-                        name="remember"
-                        id="remember">
-
-                    <label
-                        class="form-check-label"
-                        for="remember">
-
-                        Remember Me
-
-                    </label>
-
-                </div>
-
-                <button
-                type="submit"
-                class="btn btn-primary">
-
-                    Login
-
-                </button>
-
-                <div class="mt-3">
-
-                    <a href="/forgot-password">
-                        Forgot Password?
-                    </a>
-
-                </div>
-
-                <hr>
-
-                <div>
-
-                    Don't have an account?
-
-                    <a href="/register">
-                        Register
-                    </a>
-
-                </div>
-
-            </form>
-
+        <div class="form-group">
+            <label class="form-label" for="login-password">Password</label>
+            <input
+                type="password"
+                name="password"
+                id="login-password"
+                class="form-input"
+                placeholder="Enter your password"
+                required
+                autocomplete="current-password">
         </div>
 
+        <div class="remember-row">
+            <label class="checkbox-group">
+                <input type="checkbox" name="remember" id="remember">
+                Remember me
+            </label>
+            <a href="/forgot-password" class="forgot-link">Forgot password?</a>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full">
+            Sign In
+        </button>
+
+    </form>
+
+    <div class="auth-footer">
+        Don't have an account? <a href="/register">Create one</a>
     </div>
 
 </div>

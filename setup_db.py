@@ -1,24 +1,13 @@
-import sqlite3
+"""Run on a fresh install or to migrate a legacy database."""
 
-conn = sqlite3.connect('expenses.db')
-cursor = conn.cursor()
+import os
+from pathlib import Path
 
-#CREATE USER TABLE
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL           
-    )
-''')
+from db import migrate
 
-#ADD user_id column to expenses table
-try:
-    cursor.execute("ALTER TABLE expenses ADD COLUMN user_id INTERGER")
-except:
-    pass
-
-conn.commit()
-conn.close()
-
-print("Database Setup Completed Successfully!")
+if __name__ == "__main__":
+    app_dir = Path(__file__).resolve().parent
+    path = Path(os.environ.get("EXPENSE_DB_PATH", app_dir / "expenses.db"))
+    if not path.is_absolute():
+        path = app_dir / path
+    print(migrate(path))

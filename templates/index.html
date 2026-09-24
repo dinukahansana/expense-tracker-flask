@@ -1,315 +1,398 @@
 {% extends "base.html" %}
 
+{% block title %}Dashboard - Expense Tracker{% endblock %}
+
 {% block content %}
 
-<div class="row mt-4">
+<div class="animate-in">
 
-    <div class="col-md-3">
-
-        <div class="card border-0 shadow">
-
-            <div class="card-body text-center">
-
-                <h1>💰</h1>
-
-                <h5>Total Spending</h5>
-
-                <h3 class="text-primary">
-
-                    Rs. {{ total }}
-
-                </h3>
-
-            </div>
-
-        </div>
-
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Welcome back, {{ session['username'] }}. Here's an overview of your spending.</p>
+        <p class="period-label">Selected period: <strong>{{ period }}</strong></p>
     </div>
 
-    <div class="col-md-3">
-
-        <div class="card border-0 shadow">
-
-            <div class="card-body text-center">
-
-                <h1>🧾</h1>
-
-                <h5>Total Expenses</h5>
-
-                <h3>
-
-                    {{ expense_count }}
-
-                </h3>
-
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon spending">
+                    <i data-lucide="wallet" style="width:20px;height:20px"></i>
+                </div>
+                <span class="stat-label">Total Spending</span>
             </div>
-
+            <p class="stat-value">Rs. {{ money(total) }}</p>
         </div>
 
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon expenses">
+                    <i data-lucide="receipt" style="width:20px;height:20px"></i>
+                </div>
+                <span class="stat-label">Total Expenses</span>
+            </div>
+            <p class="stat-value">{{ expense_count }}</p>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon categories">
+                    <i data-lucide="folder-open" style="width:20px;height:20px"></i>
+                </div>
+                <span class="stat-label">Categories</span>
+            </div>
+            <p class="stat-value">{{ category_count }}</p>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon highest">
+                    <i data-lucide="trending-up" style="width:20px;height:20px"></i>
+                </div>
+                <span class="stat-label">Highest Expense</span>
+            </div>
+            <p class="stat-value">Rs. {{ money(highest_expense) }}</p>
+        </div>
     </div>
 
-    <div class="col-md-3">
+    <!-- Filter Toolbar -->
+    <div class="filter-card">
+        <form method="GET" action="/" class="filter-form">
+            <div class="filter-row filter-row-primary">
+            <label class="filter-control filter-search">
+                <span>Search</span>
+                <input type="search" name="search" class="form-input" placeholder="Search expenses..." value="{{ filters.search }}">
+            </label>
 
-        <div class="card border-0 shadow">
+            <label class="filter-control filter-category">
+                <span>Category</span>
+                <select name="category" class="form-input form-select">
+                    <option value="">All Categories</option>
+                    {% for item in categories %}<option value="{{ item }}" {% if filters.category == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+                </select>
+            </label>
 
-            <div class="card-body text-center">
-
-                <h1>📂</h1>
-
-                <h5>Categories</h5>
-
-                <h3>
-
-                    {{ category_count }}
-
-                </h3>
-
+            <label class="filter-control filter-sort">
+                <span>Sort by</span>
+                <select name="sort" class="form-input form-select">
+                    {% for value, label in [('date_desc','Newest first'),('date_asc','Oldest first'),('amount_desc','Highest amount'),('amount_asc','Lowest amount'),('name','Name A-Z')] %}
+                    <option value="{{ value }}" {% if filters.sort == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
             </div>
 
-        </div>
+            <div class="filter-row filter-row-secondary">
+            <label class="filter-control filter-month">Month <input type="month" name="month" class="form-input" value="{{ filters.month }}"></label>
+            <label class="filter-control filter-from">From <input type="date" name="date_from" class="form-input" value="{{ filters.date_from }}"></label>
+            <label class="filter-control filter-to">To <input type="date" name="date_to" class="form-input" value="{{ filters.date_to }}"></label>
 
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary">
+                    <i data-lucide="search" style="width:16px;height:16px"></i>Search
+                </button>
+                <a href="/" class="btn btn-ghost">Clear</a>
+                <a href="{{ url_for('export_csv', **request.args.to_dict(flat=True)) }}" class="btn btn-secondary">Export CSV</a>
+            </div>
+            </div>
+        </form>
     </div>
 
-    <div class="col-md-3">
+    <!-- Expenses Table or Empty State -->
+    {% if expenses %}
 
-        <div class="card border-0 shadow">
-
-            <div class="card-body text-center">
-
-                <h1>📈</h1>
-
-                <h5>Highest Expense</h5>
-
-                <h3 class="text-danger">
-
-                    Rs. {{ highest_expense }}
-
-                </h3>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-<div class="container mt-5">
-
-    <div class="card shadow-lg">
-
-        <div class="card-header bg-primary text-white">
-            <div class="d-flex justify-content-between align-items-center">
-
-                <h2>💰 Expense Tracker Dashboard</h2>
-
-                <div>
-
-                    Welcome, {{ session['username'] }}
-
-                    <a href="/logout"
-                    class="btn btn-danger btn-sm ms-2">
-
-                        Logout
-
-                    </a>
-
-                </div>
-
-            </div>
-        </div>
-
-        <div class="card-body">
-
-            <form method="GET" class="row mb-3">
-
-                <div class="col-md-4">
-                    <input
-                        type="text"
-                        name="search"
-                        class="form-control"
-                        placeholder="Search expense..."
-                        value="{{ search }}">
-                </div>
-
-                <div class="col-md-4">
-                    <select name="category" class="form-select">
-
-                        <option value="">All Categories</option>
-
-                        <option value="Food"
-                            {% if category == 'Food' %}selected{% endif %}>
-                            Food
-                        </option>
-
-                        <option value="Travel"
-                            {% if category == 'Travel' %}selected{% endif %}>
-                            Travel
-                        </option>
-
-                        <option value="Bills"
-                            {% if category == 'Bills' %}selected{% endif %}>
-                            Bills
-                        </option>
-
-                        <option value="Shopping"
-                            {% if category == 'Shopping' %}selected{% endif %}>
-                            Shopping
-                        </option>
-
-                    </select>
-                </div>
-
-                <div class="col-md-4">
-                    <button class="btn btn-primary w-100">
-                        Search
-                    </button>
-                </div>
-
-            </form>
-
-            <a href="/add" class="btn btn-success mb-3">
-                + Add Expense
-            </a>
-
-            <table class="table table-striped table-hover">
-
-                <thead>
-
-                    <tr>
-                        
-                        <th>Name</th>
-                        <th>Category</th>
-                        <th>Amount</th>
-                        <th>Action</th>
-                    </tr>
-
-                </thead>
-
-                <tbody>
-
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th class="col-select">
+                        <span class="sr-only">Select</span>
+                    </th>
+                    <th>Expense</th>
+                    <th>Category</th>
+                    <th>Date</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
                 {% for expense in expenses %}
-
-                    <tr>
-
-                        
-
-                        <td>{{ expense[1] }}</td>
-
-                        <td>{{ expense[2] }}</td>
-
-                        <td>Rs. {{ expense[3] }}</td>
-
-                        <td>
-
-                            <div class="d-flex gap-2">
-
-                                <form action="/delete/{{ expense[0] }}"
-                                      method="POST">
-
-                                    <button
-                                        class="btn btn-danger btn-sm"
-                                        onclick="return confirm('Delete this expense?')">
-
-                                        Delete
-
-                                    </button>
-
-                                </form>
-
-                                <a href="/edit/{{ expense[0] }}"
-                                   class="btn btn-warning btn-sm">
-
-                                    Edit
-
-                                </a>
-
-                            </div>
-
-                        </td>
-
-                    </tr>
-
+                <tr class="expense-row">
+                    <td class="col-select">
+                        <input
+                            type="radio"
+                            name="expense-select"
+                            class="expense-radio"
+                            data-id="{{ expense.id }}"
+                            data-name="{{ expense.name }}"
+                            aria-label="Select {{ expense.name }}">
+                    </td>
+                    <td>{{ expense.name }}</td>
+                    <td>
+                        <span class="badge badge-{{ expense.category|lower if expense.category in ['Food','Travel','Bills','Shopping'] else 'default' }}">{{ expense.category }}</span>
+                    </td>
+                    <td>{{ expense.expense_date or 'Unknown' }}</td>
+                    <td class="col-amount">Rs. {{ money(expense.amount_cents) }}</td>
+                </tr>
                 {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
-                </tbody>
+    {% if page_count > 1 %}
+    <nav class="pagination" aria-label="Expense pages">
+        {% if page > 1 %}<a class="btn btn-secondary" href="{{ url_for('index', **dict(request.args.to_dict(flat=True), page=page-1)) }}">Previous</a>{% endif %}
+        <span>Page {{ page }} of {{ page_count }}</span>
+        {% if page < page_count %}<a class="btn btn-secondary" href="{{ url_for('index', **dict(request.args.to_dict(flat=True), page=page+1)) }}">Next</a>{% endif %}
+    </nav>
+    {% endif %}
 
-            </table>
-
-            <div class="alert alert-info">
-                <h4>Total Spending: Rs. {{ total }}</h4>
+    <!-- Action Bar -->
+    <div class="action-bar">
+        <div class="action-bar-left">
+            <span class="action-bar-info" id="selected-expense-info">
+                Select an expense to manage it
+            </span>
+        </div>
+        <div class="action-dropdown">
+            <button class="btn btn-secondary" id="action-dropdown-btn" type="button">
+                <i data-lucide="settings" style="width:16px;height:16px"></i>
+                Choose Action
+                <i data-lucide="chevron-down" style="width:14px;height:14px"></i>
+            </button>
+            <div class="action-dropdown-menu" id="action-dropdown-menu">
+                <button class="action-dropdown-item" id="action-edit" type="button">
+                    <i data-lucide="edit-3" style="width:16px;height:16px"></i>
+                    Edit Expense
+                </button>
+                <button class="action-dropdown-item danger" id="action-delete" type="button">
+                    <i data-lucide="trash-2" style="width:16px;height:16px"></i>
+                    Delete Expense
+                </button>
             </div>
+        </div>
+    </div>
 
-            <div class="row mt-4">
-                <div class="col-md-6">
-                    <div class="card shadow">
-                        <div class="card-header">
-                            📊 Category Distribution
-                        </div>
+    {% else %}
 
-                        <div class="card-body">
-                            <canvas id="pieChart"></canvas>
-                        </div>
-                    </div>
-                </div>
+    <!-- Empty State -->
+    <div class="empty-state">
+        <div class="empty-state-icon">
+            <i data-lucide="{% if filters.search or filters.category or filters.month or filters.date_from or filters.date_to %}search-x{% else %}receipt{% endif %}" style="width:28px;height:28px"></i>
+        </div>
+        {% if filters.search or filters.category or filters.month or filters.date_from or filters.date_to %}
+            <h3 class="empty-state-title">No expenses found</h3>
+            <p class="empty-state-text">Try changing your search or filter criteria.</p>
+            <a href="/" class="btn btn-secondary">Clear Filters</a>
+        {% else %}
+            <h3 class="empty-state-title">No expenses yet</h3>
+            <p class="empty-state-text">Start tracking your spending by adding your first expense.</p>
+            <a href="/add" class="btn btn-primary">
+                <i data-lucide="plus" style="width:16px;height:16px"></i>
+                Add Expense
+            </a>
+        {% endif %}
+    </div>
 
-                <div class="col-md-6">
-                    <div class="card shadow">
-                        <div class="card-header">
-                            📈 Category Spending
-                        </div>
+    {% endif %}
 
-                        <div class="card-body">
-                            <canvas id="barChart"></canvas>
-                        </div>
-                    </div>
-                </div>
+    <!-- Charts Section -->
+    {% if expense_count %}
+    <div class="charts-grid">
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <i data-lucide="pie-chart" style="width:18px;height:18px;color:var(--primary)"></i>
+                <h3 class="chart-card-title">Spending by Category</h3>
             </div>
+            <div class="chart-card-body">
+                <canvas id="pieChart"></canvas>
+            </div>
+        </div>
 
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <i data-lucide="bar-chart-3" style="width:18px;height:18px;color:var(--primary)"></i>
+                <h3 class="chart-card-title">Category Spending</h3>
+            </div>
+            <div class="chart-card-body">
+                <canvas id="barChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card chart-card-wide">
+            <div class="chart-card-header">
+                <i data-lucide="trending-up" style="width:18px;height:18px;color:var(--primary)"></i>
+                <h3 class="chart-card-title">Monthly Spending Trend</h3>
+            </div>
+            <div class="chart-card-body">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="chart-card budget-card">
+        <div class="chart-card-header"><i data-lucide="target"></i><h3 class="chart-card-title">Budget for {{ budget_month }}</h3></div>
+        <div class="chart-card-body">
+            <p>Spent: <strong>Rs. {{ money(budget_spent) }}</strong>{% if budget_amount %} of Rs. {{ money(budget_amount) }}{% else %} — no target set{% endif %}</p>
+            {% if budget_amount %}<progress class="budget-progress budget-progress-{{ budget_tone }}" max="{{ budget_amount }}" value="{{ [budget_spent, budget_amount]|min }}" aria-label="Budget used for {{ budget_month }}"></progress>{% endif %}
+            <form method="POST" action="{{ url_for('budget', **request.args.to_dict(flat=True)) }}" class="inline-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="month" value="{{ budget_month }}">
+                <label class="filter-field">Monthly target (Rs.) <input type="number" step="0.01" min="0.01" name="amount" class="form-input" required value="{{ money(budget_amount).replace(',', '') if budget_amount else '' }}"></label>
+                <button type="submit" class="btn btn-primary">{{ 'Update Target' if budget_amount else 'Save Target' }}</button>
+                {% if budget_amount %}<button type="submit" formaction="{{ url_for('reset_budget', **request.args.to_dict(flat=True)) }}" formnovalidate class="btn btn-secondary">Reset Target</button>{% endif %}
+            </form>
+        </div>
+    </div>
+
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" id="delete-modal">
+    <div class="modal">
+        <div class="modal-icon">
+            <i data-lucide="alert-triangle" style="width:24px;height:24px"></i>
+        </div>
+        <h3 class="modal-title">Delete Expense?</h3>
+        <p class="modal-text">
+            Are you sure you want to delete <span id="delete-expense-name">this expense</span>?
+            This action cannot be undone.
+        </p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" id="delete-cancel-btn" type="button">Cancel</button>
+            <button class="btn btn-danger" id="delete-confirm-btn" type="button">
+                <i data-lucide="trash-2" style="width:16px;height:16px"></i>
+                Delete Expense
+            </button>
         </div>
     </div>
 </div>
 
-<a href="/register" class="btn btn-dark">
-    Register
-</a>
+{% endblock %}
 
+{% block scripts %}
+{% if expense_count %}
 <script>
+// Detect current theme
+const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+const fontFamily = 'Outfit';
+Chart.defaults.font.family = fontFamily;
+
+// Theme-aware colors
+const gridColor = isDark ? '#334155' : '#E2E8F0';
+const tickColor = isDark ? '#94A3B8' : '#64748B';
+const legendColor = isDark ? '#CBD5E1' : '#64748B';
+const barBg = isDark ? '#818CF8' : '#4F46E5';
+
+const chartColors = [
+    '#4F46E5', '#6366F1', '#8B5CF6', '#A78BFA',
+    '#10B981', '#F59E0B', '#EF4444', '#0EA5E9',
+    '#EC4899', '#14B8A6'
+];
 
 const categories = {{ labels | tojson | safe }};
 const amounts = {{ amounts | tojson | safe }};
+const trendLabels = {{ trend_labels | tojson | safe }};
+const trendAmounts = {{ trend_amounts | tojson | safe }};
 
 // PIE CHART
-
-new Chart(
-    document.getElementById('pieChart'),
-    {
-        type: 'pie',
-        data: {
-            labels: categories,
-            datasets: [{
-                data: amounts
-            }]
+new Chart(document.getElementById('pieChart'), {
+    type: 'pie',
+    data: {
+        labels: categories,
+        datasets: [{
+            data: amounts,
+            backgroundColor: chartColors.slice(0, categories.length),
+            borderWidth: isDark ? 1 : 0,
+            borderColor: isDark ? '#1E293B' : undefined,
+            hoverOffset: 6
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    padding: 16,
+                    usePointStyle: true,
+                    pointStyleWidth: 8,
+                    color: legendColor,
+                    font: { family: fontFamily, size: 12 }
+                }
+            }
         }
     }
-);
+});
 
 // BAR CHART
-
-new Chart(
-    document.getElementById('barChart'),
-    {
-        type: 'bar',
-        data: {
-            labels: categories,
-            datasets: [{
-                label: 'Amount Spent',
-                data: amounts
-            }]
+new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+        labels: categories,
+        datasets: [{
+            label: 'Amount Spent',
+            data: amounts,
+            backgroundColor: barBg,
+            borderRadius: 6,
+            borderSkipped: false,
+            maxBarThickness: 48
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: { color: gridColor },
+                ticks: {
+                    font: { family: fontFamily, size: 11 },
+                    color: tickColor
+                }
+            },
+            x: {
+                grid: { display: false },
+                ticks: {
+                    font: { family: fontFamily, size: 11 },
+                    color: tickColor
+                }
+            }
         }
     }
-);
+});
 
+// MONTHLY TREND
+new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+        labels: trendLabels,
+        datasets: [{
+            label: 'Amount Spent',
+            data: trendAmounts,
+            borderColor: barBg,
+            backgroundColor: barBg,
+            borderWidth: 2,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            tension: 0.25
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor } },
+            x: { grid: { display: false }, ticks: { color: tickColor } }
+        }
+    }
+});
 </script>
-
+{% endif %}
 {% endblock %}
