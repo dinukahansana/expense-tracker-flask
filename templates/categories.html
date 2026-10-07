@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Manage Categories - Expense Tracker{% endblock %}
+{% block content %}
+<div class="form-page animate-in">
+    <div class="form-card manage-card">
+        <h1 class="form-card-title">Manage Categories</h1>
+        <p class="form-card-subtitle">Rename a category, combine two, or remove one that is unused.</p>
+        <form method="POST" action="{{ url_for('add_category') }}" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="return_to" value="manage">
+            <label class="filter-field">New category
+                <input class="form-input" name="name" maxlength="40" required placeholder="Category name">
+            </label>
+            <button type="submit" class="btn btn-primary">Add Category</button>
+        </form>
+        <div class="category-manager-list">
+            {% for category in categories %}
+            <section class="category-manager-item">
+                <h2>{{ category.name }}</h2>
+                <p class="form-hint">{{ category.expense_count }} expenses · {{ category.recurring_count }} recurring rules · {{ category.budget_count }} targets</p>
+                <form method="POST" action="{{ url_for('rename_category', category_id=category.id) }}" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label class="filter-field">Rename
+                        <input class="form-input" name="name" value="{{ category.name }}" maxlength="40" required>
+                    </label>
+                    <button type="submit" class="btn btn-secondary">Rename</button>
+                </form>
+                {% if categories|length > 1 %}
+                <form method="POST" action="{{ url_for('merge_category', category_id=category.id) }}" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label class="filter-field">Merge into
+                        <select class="form-input form-select" name="target_id" required>
+                            <option value="">Choose category</option>
+                            {% for target in categories if target.id != category.id %}<option value="{{ target.id }}">{{ target.name }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <button type="submit" class="btn btn-secondary">Merge</button>
+                </form>
+                {% endif %}
+                {% if not (category.expense_count or category.recurring_count or category.budget_count) and categories|length > 1 %}
+                <form method="POST" action="{{ url_for('delete_category', category_id=category.id) }}" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-ghost text-danger">Remove unused category</button>
+                </form>
+                {% endif %}
+            </section>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

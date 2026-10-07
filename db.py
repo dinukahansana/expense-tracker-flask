@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 import sqlite3
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_CATEGORIES = ("Food", "Travel", "Bills", "Shopping")
 
 
@@ -37,6 +37,61 @@ def _backup(connection, path):
     return backup_path
 
 
+def _upgrade_v3(connection):
+    connection.execute("ALTER TABLE users ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0")
+    connection.execute("""CREATE TABLE account_tokens (
+        token_hash TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        purpose TEXT NOT NULL CHECK (purpose = 'password_reset'),
+        expires_at INTEGER NOT NULL,
+        used_at INTEGER
+    )""")
+    connection.execute("CREATE INDEX idx_account_tokens_user ON account_tokens(user_id, purpose)")
+    connection.execute("""CREATE TABLE category_budgets (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        month TEXT NOT NULL,
+        category TEXT NOT NULL,
+        amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+        PRIMARY KEY (user_id, month, category)
+    )""")
+    connection.execute("""CREATE TABLE recurring_rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+        day_of_month INTEGER NOT NULL CHECK (day_of_month BETWEEN 1 AND 31),
+        start_month TEXT NOT NULL,
+        generate_from_month TEXT NOT NULL,
+        end_month TEXT,
+        active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+        created_at TEXT NOT NULL
+    )""")
+    connection.execute("CREATE INDEX idx_recurring_rules_user ON recurring_rules(user_id, active)")
+    connection.execute("""CREATE TABLE recurring_occurrences (
+        rule_id INTEGER NOT NULL REFERENCES recurring_rules(id) ON DELETE CASCADE,
+        occurrence_month TEXT NOT NULL,
+        due_date TEXT NOT NULL,
+        expense_id INTEGER REFERENCES expenses(id) ON DELETE SET NULL,
+        PRIMARY KEY (rule_id, occurrence_month)
+    )""")
+    connection.execute("""CREATE TABLE import_batches (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        sha256 TEXT NOT NULL,
+        imported_at TEXT NOT NULL,
+        row_count INTEGER NOT NULL,
+        PRIMARY KEY (user_id, sha256)
+    )""")
+    connection.execute("""CREATE TABLE legacy_assignment_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        expense_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        previous_legacy_user_id INTEGER,
+        operator TEXT NOT NULL,
+        assigned_at TEXT NOT NULL
+    )""")
+
+
 def migrate(path):
     """Create or upgrade the database. Never modify an existing DB without a backup."""
     path = Path(path).resolve()
@@ -57,6 +112,24 @@ def migrate(path):
                 raise RuntimeError("Database failed integrity check; migration aborted")
             backup_path = _backup(connection, path)
             report["backup"] = str(backup_path)
+
+        if version == 2:
+            required = {"users", "expenses", "categories", "budgets", "login_attempts"}
+            missing = [name for name in required if not _table_exists(connection, name)]
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(expenses)")}
+            if missing or not {"amount_cents", "user_id", "expense_date", "created_at"}.issubset(columns):
+                raise RuntimeError(f"Incomplete version 2 schema (missing tables: {missing}); migration aborted")
+            report["orphan_expense_ids"] = [row[0] for row in connection.execute(
+                "SELECT id FROM expenses WHERE user_id IS NULL ORDER BY id")]
+            report["undated_expense_ids"] = [row[0] for row in connection.execute(
+                "SELECT id FROM expenses WHERE expense_date IS NULL ORDER BY id")]
+            connection.execute("BEGIN IMMEDIATE")
+            _upgrade_v3(connection)
+            connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            connection.commit()
+            if backup_path:
+                backup_path.with_suffix(".json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+            return report
 
         connection.execute("BEGIN IMMEDIATE")
         connection.execute("""CREATE TABLE IF NOT EXISTS users (
@@ -135,6 +208,7 @@ def migrate(path):
             failures INTEGER NOT NULL,
             window_start INTEGER NOT NULL
         )""")
+        _upgrade_v3(connection)
         connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         connection.commit()
         if backup_path:

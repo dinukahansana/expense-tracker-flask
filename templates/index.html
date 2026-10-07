@@ -94,6 +94,7 @@
                 </button>
                 <a href="/" class="btn btn-ghost">Clear</a>
                 <a href="{{ url_for('export_csv', **request.args.to_dict(flat=True)) }}" class="btn btn-secondary">Export CSV</a>
+                <a href="{{ url_for('import_csv') }}" class="btn btn-secondary">Import CSV</a>
             </div>
             </div>
         </form>
@@ -234,8 +235,11 @@
     <div class="chart-card budget-card">
         <div class="chart-card-header"><i data-lucide="target"></i><h3 class="chart-card-title">Budget for {{ budget_month }}</h3></div>
         <div class="chart-card-body">
+            <p class="form-hint">Full-month spending, including expenses hidden by the dashboard filters.</p>
             <p>Spent: <strong>Rs. {{ money(budget_spent) }}</strong>{% if budget_amount %} of Rs. {{ money(budget_amount) }}{% else %} — no target set{% endif %}</p>
             {% if budget_amount %}<progress class="budget-progress budget-progress-{{ budget_tone }}" max="{{ budget_amount }}" value="{{ [budget_spent, budget_amount]|min }}" aria-label="Budget used for {{ budget_month }}"></progress>{% endif %}
+            {% if budget_amount and budget_spent >= budget_amount %}<p class="budget-alert danger" role="status">Monthly target reached or exceeded by Rs. {{ money(budget_spent - budget_amount) }}.</p>
+            {% elif budget_amount and budget_spent * 100 >= budget_amount * 80 %}<p class="budget-alert warning" role="status">You are close to your monthly target.</p>{% endif %}
             <form method="POST" action="{{ url_for('budget', **request.args.to_dict(flat=True)) }}" class="inline-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="month" value="{{ budget_month }}">
@@ -243,6 +247,37 @@
                 <button type="submit" class="btn btn-primary">{{ 'Update Target' if budget_amount else 'Save Target' }}</button>
                 {% if budget_amount %}<button type="submit" formaction="{{ url_for('reset_budget', **request.args.to_dict(flat=True)) }}" formnovalidate class="btn btn-secondary">Reset Target</button>{% endif %}
             </form>
+            <div class="category-budget-section">
+                <h4>Category targets</h4>
+                {% for target in category_targets %}
+                <div class="category-budget-item">
+                    <div class="category-budget-heading"><strong>{{ target.category }}</strong><span>Rs. {{ money(target.spent) }} of Rs. {{ money(target.amount) }}</span></div>
+                    <progress class="budget-progress budget-progress-{{ target.tone }}" max="{{ target.amount }}" value="{{ [target.spent, target.amount]|min }}" aria-label="{{ target.category }} budget used"></progress>
+                    {% if target.spent >= target.amount %}<p class="budget-alert danger" role="status">{{ target.category }} target reached or exceeded.</p>
+                    {% elif target.spent * 100 >= target.amount * 80 %}<p class="budget-alert warning" role="status">{{ target.category }} target is nearly used.</p>{% endif %}
+                    <form method="POST" action="{{ url_for('reset_category_budget', **request.args.to_dict(flat=True)) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="month" value="{{ budget_month }}">
+                        <input type="hidden" name="category" value="{{ target.category }}">
+                        <button type="submit" class="btn btn-ghost">Reset {{ target.category }} target</button>
+                    </form>
+                </div>
+                {% else %}<p class="form-hint">No category targets for this month.</p>{% endfor %}
+                <form method="POST" action="{{ url_for('category_budget', **request.args.to_dict(flat=True)) }}" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="month" value="{{ budget_month }}">
+                    <label class="filter-field">Category
+                        <select name="category" class="form-input form-select" required>
+                            <option value="">Choose category</option>
+                            {% for item in categories %}<option value="{{ item }}">{{ item }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <label class="filter-field">Target (Rs.)
+                        <input type="number" name="amount" class="form-input" step="0.01" min="0.01" required>
+                    </label>
+                    <button type="submit" class="btn btn-secondary">Save Category Target</button>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -272,6 +307,16 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+// A state-changing request is used so opening the dashboard never creates data via GET.
+fetch("{{ url_for('generate_recurring') }}", {
+  method: 'POST',
+  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+  body: new URLSearchParams({csrf_token: document.querySelector('meta[name="csrf-token"]').content}),
+  credentials: 'same-origin'
+}).then(response => response.ok ? response.json() : null)
+  .then(result => { if (result?.created) location.reload(); });
+</script>
 {% if expense_count %}
 <script>
 // Detect current theme

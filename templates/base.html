@@ -59,6 +59,7 @@
                             <i data-lucide="plus-circle" style="width:16px;height:16px"></i>
                             Add Expense
                         </a>
+                        <a href="{{ url_for('recurring') }}" class="nav-link {% if request.path == '/recurring' %}active{% endif %}">Recurring</a>
                     </div>
 
                     <div class="navbar-right">
@@ -70,6 +71,7 @@
                             <i data-lucide="user" style="width:16px;height:16px"></i>
                             {{ session['username'] }}
                         </span>
+                        <a href="{{ url_for('settings') }}" class="nav-link {% if request.path == '/settings' %}active{% endif %}">Settings</a>
                         <form method="POST" action="{{ url_for('logout') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn-logout">

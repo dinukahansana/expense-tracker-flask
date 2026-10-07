@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Account Settings - Expense Tracker{% endblock %}
+{% block content %}
+<div class="form-page animate-in">
+    <div class="form-card">
+        <h1 class="form-card-title">Account Settings</h1>
+        <p class="form-card-subtitle">Change your password while signed in.</p>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if error %}<p class="field-error" role="alert">{{ error }}</p>{% endif %}
+            <div class="form-group">
+                <label class="form-label" for="current-password">Current password</label>
+                <input class="form-input" type="password" id="current-password" name="current_password" autocomplete="current-password" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="new-password">New password</label>
+                <input class="form-input" type="password" id="new-password" name="new_password" autocomplete="new-password" required>
+                <p class="form-hint">Use 12–128 characters with a letter and a number.</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="confirm-password">Confirm new password</label>
+                <input class="form-input" type="password" id="confirm-password" name="confirm_password" autocomplete="new-password" required>
+            </div>
+            <div class="form-actions"><button type="submit" class="btn btn-primary">Change Password</button></div>
+        </form>
+    </div>
+</div>
+{% endblock %}

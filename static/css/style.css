@@ -147,6 +147,17 @@
 .filter-field { color: var(--text-secondary); font-size: .8rem; display: grid; gap: .2rem; }
 .inline-form { display: flex; gap: .7rem; align-items: end; flex-wrap: wrap; margin-top: 1rem; }
 .secondary-form { border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.5rem; }
+.manage-card { max-width: 820px; }
+.recurring-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: end; }
+.recurring-form label { display: grid; gap: 0.35rem; min-width: 0; }
+.recurring-form .btn { justify-self: start; }
+.recurring-heading, .recurring-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.recurring-item { border-top: 1px solid var(--border); padding: 1.25rem 0; }
+.recurring-actions { justify-content: flex-start; margin-top: 0.75rem; }
+@media (max-width: 600px) { .recurring-form { grid-template-columns: minmax(0, 1fr); } }
+.category-manager-list { display: grid; gap: 1rem; margin-top: 1.5rem; }
+.category-manager-item { padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); }
+.category-manager-item h2 { font-size: 1rem; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin: 1rem; }
 .budget-card { margin-top: 1.5rem; }
 .budget-card progress {
@@ -167,6 +178,14 @@
 .budget-card progress::-webkit-progress-bar { background: var(--border); border-radius: 999px; }
 .budget-card progress::-webkit-progress-value { background: var(--budget-progress-color); border-radius: 999px; }
 .budget-card progress::-moz-progress-bar { background: var(--budget-progress-color); border-radius: 999px; }
+.budget-alert { margin-top: .45rem; font-size: .875rem; font-weight: 600; }
+.budget-alert.warning { color: var(--warning); }
+.budget-alert.danger { color: var(--danger); }
+.category-budget-section { border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.25rem; }
+.category-budget-section h4 { margin-bottom: .75rem; }
+.category-budget-item { border: 1px solid var(--border); border-radius: var(--radius); padding: .85rem 1rem; margin-bottom: .75rem; }
+.category-budget-heading { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.category-budget-item progress { margin-top: .45rem; }
 .table-container { overflow-x: auto; }
 * {
   box-sizing: border-box;
@@ -379,7 +398,7 @@ button {
 /* --------------------------------------------------------------------------
    Mobile Nav
    -------------------------------------------------------------------------- */
-@media (max-width: 768px) {
+@media (max-width: 950px) {
   .navbar-toggle {
     display: block;
     margin-left: auto;
@@ -558,7 +577,7 @@ button {
 }
 
 .filter-row-secondary {
-  grid-template-columns: repeat(3, minmax(150px, 1fr)) minmax(330px, 2fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .filter-control {
@@ -577,7 +596,9 @@ button {
 
 .filter-actions {
   display: flex;
-  justify-content: flex-end;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  justify-content: flex-start;
   align-items: center;
   gap: 0.75rem;
   min-width: 0;

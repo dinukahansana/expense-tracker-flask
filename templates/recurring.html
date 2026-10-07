@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Recurring bills{% endblock %}
+{% block content %}
+<div class="page-header"><h1 class="page-title">Recurring bills</h1><p class="page-subtitle">Create one expense when each bill becomes due. Days 29–31 use the last day in shorter months.</p></div>
+<div class="form-card manage-card">
+  <h2>Add a recurring bill</h2>
+  {% for error in errors %}<div class="notice notice-error" role="alert">{{ error }}</div>{% endfor %}
+  <form method="post" action="{{ url_for('recurring') }}" class="recurring-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Name <input class="form-input" name="name" maxlength="120" required value="{{ values.name }}"></label>
+    <label>Category <select class="form-input form-select" name="category" required>{% for category in categories %}<option value="{{ category }}" {% if values.category == category %}selected{% endif %}>{{ category }}</option>{% endfor %}</select></label>
+    <label>Amount (Rs.) <input class="form-input" name="amount" type="number" min="0.01" step="0.01" required value="{{ values.amount }}"></label>
+    <label>Day of month <input class="form-input" name="day_of_month" type="number" min="1" max="31" required value="{{ values.day_of_month }}"></label>
+    <label>Start month <input class="form-input" name="start_month" type="month" required value="{{ values.start_month }}"></label>
+    <label>End month (optional) <input class="form-input" name="end_month" type="month" value="{{ values.end_month }}"></label>
+    <button type="submit" class="btn btn-primary">Save bill</button>
+  </form>
+</div>
+<div class="form-card manage-card">
+  <div class="recurring-heading"><h2>Your recurring bills</h2><form method="post" action="{{ url_for('generate_recurring') }}" id="generate-recurring-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-secondary">Generate due bills</button></form></div>
+  {% if not rules %}<p>No recurring bills yet.</p>{% endif %}
+  {% for rule in rules %}
+  <div class="recurring-item">
+    <form method="post" action="{{ url_for('edit_recurring', rule_id=rule.id) }}" class="recurring-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Name <input class="form-input" name="name" maxlength="120" required value="{{ rule.name }}"></label>
+      <label>Category <select class="form-input form-select" name="category">{% for category in categories %}<option value="{{ category }}" {% if rule.category == category %}selected{% endif %}>{{ category }}</option>{% endfor %}</select></label>
+      <label>Amount (Rs.) <input class="form-input" name="amount" type="number" min="0.01" step="0.01" required value="{{ money(rule.amount_cents).replace(',', '') }}"></label>
+      <label>Day of month <input class="form-input" name="day_of_month" type="number" min="1" max="31" required value="{{ rule.day_of_month }}"></label>
+      <label>Start month <input class="form-input" name="start_month" type="month" required value="{{ rule.start_month }}"></label>
+      <label>End month <input class="form-input" name="end_month" type="month" value="{{ rule.end_month or '' }}"></label>
+      <button class="btn btn-secondary" type="submit">Save changes</button>
+    </form>
+    <div class="recurring-actions"><span>{{ 'Active' if rule.active else 'Paused' }}</span>
+      <form method="post" action="{{ url_for('toggle_recurring', rule_id=rule.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-secondary" type="submit">{{ 'Pause' if rule.active else 'Resume' }}</button></form>
+      <form method="post" action="{{ url_for('delete_recurring', rule_id=rule.id) }}" onsubmit="return confirm('Remove this recurring rule? Existing expenses will remain.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost" type="submit">Remove</button></form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}<script>
+document.getElementById('generate-recurring-form')?.addEventListener('submit', async function(event) {
+  event.preventDefault();
+  const response = await fetch(this.action, {method:'POST', body:new FormData(this), credentials:'same-origin'});
+  const result = await response.json();
+  if (response.ok) { alert(`${result.created} due expense(s) created.`); location.reload(); }
+  else { alert(result.error || 'Could not generate due bills.'); }
+});
+</script>{% endblock %}
