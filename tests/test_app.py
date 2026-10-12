@@ -235,6 +235,31 @@ class ExpenseTrackerTests(unittest.TestCase):
         self.assertEqual(self.client.post("/register", data={"csrf_token": token,
             "username": "newuser", "password": PASSWORD}).status_code, 302)
 
+    def test_private_deployment_disables_registration_but_keeps_login(self):
+        with patch.dict(os.environ, {"EXPENSE_ALLOW_REGISTRATION": "0",
+                                  "EXPENSE_TRUSTED_HOSTS": "expense.example",
+                                  "FLASK_COOKIE_SECURE": "1"}):
+            app = create_app({"TESTING": True,
+                              "SECRET_KEY": "test-secret-key-of-at-least-32-characters",
+                              "DATABASE": str(self.path)})
+        self.assertFalse(app.config["REGISTRATION_ENABLED"])
+        self.assertTrue(app.config["SESSION_COOKIE_SECURE"])
+        client = app.test_client()
+        page = client.get("/login", base_url="https://expense.example")
+        self.assertEqual(page.status_code, 200)
+        self.assertNotIn("Create one", page.get_data(as_text=True))
+        self.assertEqual(client.get("/register", base_url="https://expense.example").status_code, 404)
+        self.assertEqual(client.post("/register", base_url="https://expense.example",
+                                     data={"username": "newuser", "password": PASSWORD}).status_code, 404)
+        self.assertEqual(client.get("/login", base_url="https://wrong.example").status_code, 400)
+        with client.session_transaction(base_url="https://expense.example") as session:
+            csrf = session["csrf_token"]
+        self.assertEqual(client.post("/login", base_url="https://expense.example",
+                                     data={"csrf_token": csrf, "username": "alice",
+                                           "password": PASSWORD}).status_code, 302)
+        with closing(connect(self.path)) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM users").fetchone()[0], 2)
+
 
 class MigrationTests(unittest.TestCase):
     def test_legacy_backup_orphans_and_exact_cents(self):

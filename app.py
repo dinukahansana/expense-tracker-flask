@@ -215,9 +215,13 @@ def _login_key(username):
 
 def create_app(test_config=None):
     app = Flask(__name__)
+    trusted_hosts = [host.strip() for host in os.environ.get("EXPENSE_TRUSTED_HOSTS", "").split(",")
+                     if host.strip()]
     app.config.update(
         SECRET_KEY=configured_secret_key(),
         DATABASE=os.environ.get("EXPENSE_DB_PATH", str(APP_DIR / "expenses.db")),
+        REGISTRATION_ENABLED=os.environ.get("EXPENSE_ALLOW_REGISTRATION", "1") == "1",
+        TRUSTED_HOSTS=trusted_hosts or None,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=os.environ.get("FLASK_COOKIE_SECURE") == "1",
@@ -241,6 +245,8 @@ def create_app(test_config=None):
     @app.before_request
     def before_request():
         g.app_db_path = db_path
+        if request.endpoint == "register" and not app.config["REGISTRATION_ENABLED"]:
+            abort(404)
         protected = {"index", "add", "edit", "delete", "add_category", "manage_categories", "rename_category", "merge_category", "delete_category", "budget", "reset_budget", "category_budget", "reset_category_budget", "export_csv", "import_csv", "logout", "settings", "recurring", "edit_recurring", "toggle_recurring", "delete_recurring", "generate_recurring"}
         if request.endpoint in protected and "user_id" not in session:
             return redirect(url_for("login"))
@@ -259,7 +265,8 @@ def create_app(test_config=None):
     @app.context_processor
     def template_helpers():
         return {"csrf_token": csrf_token, "money": money,
-                "static_version": static_version}
+                "static_version": static_version,
+                "registration_enabled": app.config["REGISTRATION_ENABLED"]}
 
     @app.after_request
     def security_headers(response):
