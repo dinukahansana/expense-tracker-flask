@@ -1,6 +1,6 @@
 # Deploy this expense tracker on PythonAnywhere
 
-This guide is for a small personal site using your existing accounts and SQLite data. PythonAnywhere's free Beginner account offers one web app, one worker, and 512 MiB of storage. New free accounts must renew the web app monthly and cannot schedule automatic tasks. See [current free account limits](https://help.pythonanywhere.com/pages/FreeAccountsFeatures/). Keep a downloaded backup of the database; the free account is not a backup service.
+This guide is for a public multi-user site that keeps your existing accounts and SQLite data. PythonAnywhere's free Beginner account offers one web app, one worker, and 512 MiB of storage, so monitor usage as new users join. New free accounts must renew the web app monthly and cannot schedule automatic tasks. See [current free account limits](https://help.pythonanywhere.com/pages/FreeAccountsFeatures/). Keep a downloaded backup of the database; the free account is not a backup service.
 
 Replace every `YOURNAME`, `YOUR-GITHUB-NAME`, `YOUR-REPO`, and backup filename below with your real values. Use the `.eu.pythonanywhere.com` domain instead if you signed up on PythonAnywhere's EU site.
 
@@ -66,16 +66,18 @@ sys.path.insert(0, str(home / "expense-tracker"))
 os.environ["FLASK_SECRET_KEY"] = (home / ".expense-tracker-secret").read_text().strip()
 os.environ["FLASK_COOKIE_SECURE"] = "1"
 os.environ["EXPENSE_DB_PATH"] = str(home / "expense-data" / "expenses.db")
-os.environ["EXPENSE_ALLOW_REGISTRATION"] = "0"
+os.environ["EXPENSE_ALLOW_REGISTRATION"] = "1"
 os.environ["EXPENSE_TRUSTED_HOSTS"] = "YOURNAME.pythonanywhere.com"
 
 from app import create_app
 application = create_app()
 ```
 
-This uses PythonAnywhere's production web server, HTTPS cookies, your private database path, and your existing accounts. It disables the public registration page. Setting `EXPENSE_ALLOW_REGISTRATION` to `1` would open signup to everyone who can reach the site; leave it at `0` for a private account.
+This uses PythonAnywhere's production web server, HTTPS cookies, your private database path, and your existing accounts. Registration remains open so new users can create their own accounts. Setting `EXPENSE_ALLOW_REGISTRATION` to `0` would close signup; do not use that setting for this public deployment.
 
-In the Web tab's **Static files** section, map `/static/` to `/home/YOURNAME/expense-tracker/static`. Click **Reload**. Visit `https://YOURNAME.pythonanywhere.com` and sign in with your existing username and password. The `/register` page should return 404.
+In the Web tab's **Static files** section, map `/static/` to `/home/YOURNAME/expense-tracker/static`. Click **Reload**. Visit `https://YOURNAME.pythonanywhere.com` and sign in with your existing username and password. The `/register` page should show the signup form. Each user's expenses, budgets, categories, and exports are scoped to that account.
+
+Email delivery is not configured yet, so users cannot recover a forgotten password by email. Configure verified email and secure self-service recovery before depending on the site for a broad public audience.
 
 If the page fails, check the **Error log** link in the Web tab. Common causes are a mismatched `YOURNAME`, missing backup restore, or a virtualenv using a different Python version from the Web app. See PythonAnywhere's [Flask setup guide](https://help.pythonanywhere.com/pages/Flask/).
 

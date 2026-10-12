@@ -23,13 +23,13 @@ Environment variables:
 | `FLASK_SECRET_KEY` | Required random secret, at least 32 characters. |
 | `EXPENSE_DB_PATH` | Optional database path. Relative paths are resolved from this project directory; default is `expenses.db` here. |
 | `FLASK_COOKIE_SECURE` | Set to `1` when serving over HTTPS so session cookies require HTTPS. |
-| `EXPENSE_ALLOW_REGISTRATION` | Set to `0` on a private deployment to close account creation. Local default is `1`. |
+| `EXPENSE_ALLOW_REGISTRATION` | Defaults to `1`, allowing public account creation. Set to `0` only if you intentionally want to close signup. |
 | `EXPENSE_TRUSTED_HOSTS` | Optional comma-separated allowed hostnames, such as `yourname.pythonanywhere.com`. Set this online. |
 | `EXPENSE_BACKUP_DIR` | Optional backup folder, ideally on an external or synced drive. |
 
 Session cookies are HTTP only and SameSite Lax. Use HTTPS and `FLASK_COOKIE_SECURE=1` in production.
 
-For a small personal deployment that keeps the existing SQLite data, follow [the PythonAnywhere deployment guide](DEPLOY_PYTHONANYWHERE.md). The guide closes public registration on the hosted copy while leaving local account creation available.
+For a public multi-user deployment that keeps the existing SQLite data, follow [the PythonAnywhere deployment guide](DEPLOY_PYTHONANYWHERE.md). The guide keeps registration open so new users can create accounts.
 
 ## Existing database migration
 
