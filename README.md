@@ -26,6 +26,10 @@ Environment variables:
 | `EXPENSE_ALLOW_REGISTRATION` | Defaults to `1`, allowing public account creation. Set to `0` only if you intentionally want to close signup. |
 | `EXPENSE_TRUSTED_HOSTS` | Optional comma-separated allowed hostnames, such as `yourname.pythonanywhere.com`. Set this online. |
 | `EXPENSE_BACKUP_DIR` | Optional backup folder, ideally on an external or synced drive. |
+| `EXPENSE_EMAIL_PROVIDER` | Optional: `brevo` or `resend`. Set all four email settings together. |
+| `EXPENSE_EMAIL_API_KEY` | Private HTTPS email API key. Never commit it. |
+| `EXPENSE_EMAIL_FROM` | Verified sender address with the chosen provider. |
+| `EXPENSE_PUBLIC_BASE_URL` | HTTPS origin of the deployed site, for example `https://dinukah.pythonanywhere.com`. |
 
 Session cookies are HTTP only and SameSite Lax. Use HTTPS and `FLASK_COOKIE_SECURE=1` in production.
 
@@ -39,7 +43,7 @@ Existing amounts become integer cents. Any existing amount with fractions of a c
 
 ### Review old records
 
-Six expenses in the current local database have no verified owner, and 16 have no known expense date. Review original records before changing them:
+Some existing expenses may have no verified owner or known expense date. Review the migration report and original records before changing them:
 
 ```powershell
 py account_admin.py list-orphans
@@ -73,7 +77,7 @@ The task runs `scheduled_backup.ps1`, which creates at most one verified backup 
 
 ## Accounts and reports
 
-New passwords need 12–128 characters, including a letter and a number. Login is limited to five failed attempts per username and IP address per 15 minutes. Signed-in users can change passwords under **Settings**; other sessions are signed out. Self-service password reset stays disabled while email delivery is unconfigured. A trusted local administrator can issue a 15-minute, single-use reset link on the database computer:
+New passwords need 12–128 characters, including a letter and a number. Login is limited to five failed attempts per username and IP address and 30 total attempts per IP per 15 minutes. Signup is limited to five attempts per IP per hour. Signed-in users can change passwords under **Settings**; other sessions are signed out. When the four email settings are configured, new signups must verify their address before signing in; verified addresses can receive 15-minute, single-use password-reset links. Existing users can add a recovery address in **Settings** by confirming their password and then verifying the new address. Reset and verification resend requests are rate limited and give a generic response for unknown addresses. With no email provider, signup remains available without email and self-service reset stays disabled. A trusted local administrator can issue a 15-minute, single-use reset link on the database computer:
 
 ```powershell
 py account_admin.py reset-link --username YOUR_USERNAME

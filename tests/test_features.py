@@ -252,7 +252,8 @@ class FeatureTests(unittest.TestCase):
         report = migrate(v2)
         self.assertTrue(Path(report["backup"]).is_file())
         with closing(connect(v2)) as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 4)
+            self.assertIn("email", {row[1] for row in db.execute("PRAGMA table_info(users)")})
             row = db.execute("SELECT user_id,amount_cents FROM expenses").fetchone()
             self.assertIsNone(row["user_id"])
             self.assertEqual(row["amount_cents"], 1234)
@@ -266,3 +267,22 @@ class FeatureTests(unittest.TestCase):
         self.assertTrue(Path(restored["previous_backup"]).is_file())
         with closing(connect(self.path)) as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM expenses").fetchone()[0], 0)
+
+    def test_v3_migration_preserves_accounts_and_expenses(self):
+        with closing(connect(self.path)) as db:
+            db.execute("INSERT INTO expenses(name,category,amount_cents,user_id,expense_date,created_at) "
+                       "VALUES ('Lunch','Food',1234,1,'2026-10-01','now')")
+            db.execute("DROP TABLE email_verification_tokens")
+            db.execute("DROP TABLE auth_rate_limits")
+            db.execute("DROP INDEX idx_users_email")
+            db.execute("ALTER TABLE users DROP COLUMN email_verified_at")
+            db.execute("ALTER TABLE users DROP COLUMN email")
+            db.execute("PRAGMA user_version=3")
+            db.commit()
+        report = migrate(self.path)
+        self.assertTrue(Path(report["backup"]).is_file())
+        with closing(connect(self.path)) as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 4)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM users").fetchone()[0], 2)
+            self.assertEqual(db.execute("SELECT amount_cents FROM expenses WHERE name='Lunch'").fetchone()[0], 1234)
+            self.assertIsNone(db.execute("SELECT email FROM users WHERE username='alice'").fetchone()[0])

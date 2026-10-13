@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 import sqlite3
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_CATEGORIES = ("Food", "Travel", "Bills", "Shopping")
 
 
@@ -92,6 +92,25 @@ def _upgrade_v3(connection):
     )""")
 
 
+def _upgrade_v4(connection):
+    connection.execute("ALTER TABLE users ADD COLUMN email TEXT")
+    connection.execute("ALTER TABLE users ADD COLUMN email_verified_at INTEGER")
+    connection.execute("CREATE UNIQUE INDEX idx_users_email ON users(email COLLATE NOCASE) WHERE email IS NOT NULL")
+    connection.execute("""CREATE TABLE email_verification_tokens (
+        token_hash TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        target_email TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        used_at INTEGER
+    )""")
+    connection.execute("CREATE INDEX idx_email_tokens_user ON email_verification_tokens(user_id)")
+    connection.execute("""CREATE TABLE auth_rate_limits (
+        key TEXT PRIMARY KEY,
+        attempts INTEGER NOT NULL,
+        window_start INTEGER NOT NULL
+    )""")
+
+
 def migrate(path):
     """Create or upgrade the database. Never modify an existing DB without a backup."""
     path = Path(path).resolve()
@@ -113,18 +132,20 @@ def migrate(path):
             backup_path = _backup(connection, path)
             report["backup"] = str(backup_path)
 
-        if version == 2:
+        if version in (2, 3):
             required = {"users", "expenses", "categories", "budgets", "login_attempts"}
             missing = [name for name in required if not _table_exists(connection, name)]
             columns = {row[1] for row in connection.execute("PRAGMA table_info(expenses)")}
             if missing or not {"amount_cents", "user_id", "expense_date", "created_at"}.issubset(columns):
-                raise RuntimeError(f"Incomplete version 2 schema (missing tables: {missing}); migration aborted")
+                raise RuntimeError(f"Incomplete version {version} schema (missing tables: {missing}); migration aborted")
             report["orphan_expense_ids"] = [row[0] for row in connection.execute(
                 "SELECT id FROM expenses WHERE user_id IS NULL ORDER BY id")]
             report["undated_expense_ids"] = [row[0] for row in connection.execute(
                 "SELECT id FROM expenses WHERE expense_date IS NULL ORDER BY id")]
             connection.execute("BEGIN IMMEDIATE")
-            _upgrade_v3(connection)
+            if version == 2:
+                _upgrade_v3(connection)
+            _upgrade_v4(connection)
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             connection.commit()
             if backup_path:
@@ -209,6 +230,7 @@ def migrate(path):
             window_start INTEGER NOT NULL
         )""")
         _upgrade_v3(connection)
+        _upgrade_v4(connection)
         connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         connection.commit()
         if backup_path:

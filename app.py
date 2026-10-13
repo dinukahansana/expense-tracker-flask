@@ -11,13 +11,17 @@ import os
 from pathlib import Path
 import re
 import secrets
+import sqlite3
 import time
+from urllib.parse import urlsplit
 
 from flask import (Flask, abort, flash, g, redirect, render_template, request,
                    Response, jsonify, session, url_for)
+from email_validator import EmailNotValidError, validate_email
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from db import DEFAULT_CATEGORIES, SCHEMA_VERSION, connect
+from email_delivery import EmailDeliveryError, send_email
 from recurring import generate_due
 
 
@@ -213,14 +217,90 @@ def _login_key(username):
     return hashlib.sha256(f"{ip}|{username.casefold()}".encode()).hexdigest()
 
 
+def normalized_email(raw):
+    try:
+        return validate_email((raw or "").strip(), check_deliverability=False).normalized
+    except EmailNotValidError as exc:
+        raise ValueError("Enter a valid email address.") from exc
+
+
+def rate_limit(action, identity, maximum, seconds):
+    """Count requests across sessions without trusting client-supplied IP headers."""
+    now = int(time.time())
+    key = hashlib.sha256(f"{action}|{request.remote_addr or 'unknown'}|{identity}".encode()).hexdigest()
+    db = get_db()
+    db.execute("DELETE FROM auth_rate_limits WHERE window_start < ?", (now - 86400,))
+    row = db.execute("SELECT attempts,window_start FROM auth_rate_limits WHERE key=?", (key,)).fetchone()
+    if row and row["window_start"] > now - seconds and row["attempts"] >= maximum:
+        abort(429, "Too many requests. Please try again later.")
+    attempts = row["attempts"] + 1 if row and row["window_start"] > now - seconds else 1
+    start = row["window_start"] if row and row["window_start"] > now - seconds else now
+    db.execute("""INSERT INTO auth_rate_limits(key,attempts,window_start) VALUES (?,?,?)
+        ON CONFLICT(key) DO UPDATE SET attempts=excluded.attempts,
+        window_start=excluded.window_start""", (key, attempts, start))
+    db.commit()
+
+
+def new_email_token(db, user_id, email):
+    now = int(time.time())
+    token = secrets.token_urlsafe(32)
+    db.execute("UPDATE email_verification_tokens SET used_at=? WHERE user_id=? AND used_at IS NULL",
+               (now, user_id))
+    db.execute("""INSERT INTO email_verification_tokens
+        (token_hash,user_id,target_email,expires_at) VALUES (?,?,?,?)""",
+        (hashlib.sha256(token.encode()).hexdigest(), user_id, email, now + 86400))
+    return token
+
+
+def new_reset_token(db, user_id):
+    now = int(time.time())
+    token = secrets.token_urlsafe(32)
+    db.execute("UPDATE account_tokens SET used_at=? WHERE user_id=? AND used_at IS NULL", (now, user_id))
+    db.execute("""INSERT INTO account_tokens(token_hash,user_id,purpose,expires_at)
+        VALUES (?,?,'password_reset',?)""",
+        (hashlib.sha256(token.encode()).hexdigest(), user_id, now + 900))
+    return token
+
+
+def send_account_email(app, recipient, subject, message):
+    send_email(app.config["EMAIL_PROVIDER"], app.config["EMAIL_API_KEY"],
+               app.config["EMAIL_FROM"], recipient, subject, message)
+
+
 def create_app(test_config=None):
     app = Flask(__name__)
-    trusted_hosts = [host.strip() for host in os.environ.get("EXPENSE_TRUSTED_HOSTS", "").split(",")
+    trusted_hosts = [host.strip().lower() for host in os.environ.get("EXPENSE_TRUSTED_HOSTS", "").split(",")
                      if host.strip()]
+    email_provider = os.environ.get("EXPENSE_EMAIL_PROVIDER", "").strip().lower()
+    email_key = os.environ.get("EXPENSE_EMAIL_API_KEY", "").strip()
+    email_from = os.environ.get("EXPENSE_EMAIL_FROM", "").strip()
+    public_base = os.environ.get("EXPENSE_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    email_parts = (email_provider, email_key, email_from, public_base)
+    if any(email_parts) and not all(email_parts):
+        raise RuntimeError("Set EXPENSE_EMAIL_PROVIDER, EXPENSE_EMAIL_API_KEY, "
+                           "EXPENSE_EMAIL_FROM, and EXPENSE_PUBLIC_BASE_URL together.")
+    if email_provider:
+        if email_provider not in {"brevo", "resend"}:
+            raise RuntimeError("EXPENSE_EMAIL_PROVIDER must be brevo or resend.")
+        try:
+            normalized_email(email_from)
+        except ValueError as exc:
+            raise RuntimeError("EXPENSE_EMAIL_FROM must be a valid verified sender address.") from exc
+        parsed = urlsplit(public_base)
+        if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+                or parsed.path or parsed.query or parsed.fragment):
+            raise RuntimeError("EXPENSE_PUBLIC_BASE_URL must be an HTTPS origin without a path.")
+        if trusted_hosts and parsed.hostname.lower() not in {host.lower() for host in trusted_hosts}:
+            raise RuntimeError("EXPENSE_PUBLIC_BASE_URL must match EXPENSE_TRUSTED_HOSTS.")
     app.config.update(
         SECRET_KEY=configured_secret_key(),
         DATABASE=os.environ.get("EXPENSE_DB_PATH", str(APP_DIR / "expenses.db")),
         REGISTRATION_ENABLED=os.environ.get("EXPENSE_ALLOW_REGISTRATION", "1") == "1",
+        EMAIL_ENABLED=bool(email_provider),
+        EMAIL_PROVIDER=email_provider,
+        EMAIL_API_KEY=email_key,
+        EMAIL_FROM=email_from,
+        PUBLIC_BASE_URL=public_base,
         TRUSTED_HOSTS=trusted_hosts or None,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
@@ -247,7 +327,7 @@ def create_app(test_config=None):
         g.app_db_path = db_path
         if request.endpoint == "register" and not app.config["REGISTRATION_ENABLED"]:
             abort(404)
-        protected = {"index", "add", "edit", "delete", "add_category", "manage_categories", "rename_category", "merge_category", "delete_category", "budget", "reset_budget", "category_budget", "reset_category_budget", "export_csv", "import_csv", "logout", "settings", "recurring", "edit_recurring", "toggle_recurring", "delete_recurring", "generate_recurring"}
+        protected = {"index", "add", "edit", "delete", "add_category", "manage_categories", "rename_category", "merge_category", "delete_category", "budget", "reset_budget", "category_budget", "reset_category_budget", "export_csv", "import_csv", "logout", "settings", "settings_email", "recurring", "edit_recurring", "toggle_recurring", "delete_recurring", "generate_recurring"}
         if request.endpoint in protected and "user_id" not in session:
             return redirect(url_for("login"))
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -266,13 +346,14 @@ def create_app(test_config=None):
     def template_helpers():
         return {"csrf_token": csrf_token, "money": money,
                 "static_version": static_version,
-                "registration_enabled": app.config["REGISTRATION_ENABLED"]}
+                "registration_enabled": app.config["REGISTRATION_ENABLED"],
+                "email_enabled": app.config["EMAIL_ENABLED"]}
 
     @app.after_request
     def security_headers(response):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        if request.endpoint == "password_reset":
+        if request.endpoint in {"password_reset", "verify_email"}:
             response.headers["Referrer-Policy"] = "no-referrer"
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -790,9 +871,17 @@ def create_app(test_config=None):
     def register():
         errors = {}
         username = ""
+        email = ""
         if request.method == "POST":
+            rate_limit("register", "", 5, 3600)
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
+            if app.config["EMAIL_ENABLED"]:
+                email = request.form.get("email", "").strip()
+                try:
+                    email = normalized_email(email)
+                except ValueError as exc:
+                    errors["email"] = str(exc)
             if not 3 <= len(username) <= 50 or any(ord(c) < 32 for c in username):
                 errors["username"] = "Username must be 3 to 50 printable characters."
             if problem := password_error(password):
@@ -801,26 +890,44 @@ def create_app(test_config=None):
                 db = get_db()
                 if db.execute("SELECT 1 FROM users WHERE username=? COLLATE NOCASE", (username,)).fetchone():
                     errors["username"] = "Username already exists."
+                elif email and db.execute("SELECT 1 FROM users WHERE email=? COLLATE NOCASE", (email,)).fetchone():
+                    errors["email"] = "Email address is already registered."
                 else:
                     try:
-                        cursor = db.execute("INSERT INTO users(username,password) VALUES (?,?)",
-                                            (username, generate_password_hash(password)))
+                        cursor = db.execute("INSERT INTO users(username,password,email) VALUES (?,?,?)",
+                                            (username, generate_password_hash(password), email or None))
                         for category in DEFAULT_CATEGORIES:
                             db.execute("INSERT INTO categories(user_id,name) VALUES (?,?)",
                                        (cursor.lastrowid, category))
+                        token = new_email_token(db, cursor.lastrowid, email) if email else None
                         db.commit()
-                        flash("Account created. Please sign in.", "success")
+                        if token:
+                            link = app.config["PUBLIC_BASE_URL"] + url_for("verify_email", token=token)
+                            try:
+                                send_account_email(app, email, "Verify your Expense Tracker email",
+                                                   f"Open this link to verify your email. It expires in 24 hours:\n{link}")
+                            except EmailDeliveryError:
+                                app.logger.exception("Registration verification email failed")
+                                flash("Account created, but the email could not be sent. Try the resend page shortly.", "error")
+                                return redirect(url_for("resend_verification"))
+                            flash("Account created. Check your email to verify it before signing in.", "success")
+                        else:
+                            flash("Account created. Please sign in.", "success")
                         return redirect(url_for("login"))
+                    except sqlite3.IntegrityError:
+                        db.rollback()
+                        errors["username"] = "Username or email address is already registered."
                     except Exception:
                         db.rollback()
                         raise
-        return render_template("register.html", errors=errors, username=username), 400 if errors else 200
+        return render_template("register.html", errors=errors, username=username, email=email), 400 if errors else 200
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
         error = None
         username = ""
         if request.method == "POST":
+            rate_limit("login_ip", "", 30, 900)
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
             key = _login_key(username)
@@ -832,8 +939,10 @@ def create_app(test_config=None):
                 db.commit()
                 return render_template("login.html", error="Too many attempts. Try again in 15 minutes.",
                                        username=username), 429
-            user = db.execute("SELECT id,username,password,auth_version FROM users WHERE username=?", (username,)).fetchone()
+            user = db.execute("SELECT id,username,password,auth_version,email,email_verified_at FROM users WHERE username=?", (username,)).fetchone()
             if user and check_password_hash(user["password"], password):
+                if user["email"] and user["email_verified_at"] is None:
+                    return render_template("login.html", error="Verify your email before signing in. You can request another link below.", username=username), 403
                 db.execute("DELETE FROM login_attempts WHERE key=?", (key,))
                 db.commit()
                 session.clear()
@@ -867,7 +976,7 @@ def create_app(test_config=None):
             attempt = db.execute("SELECT failures,window_start FROM login_attempts WHERE key=?",
                                  (attempt_key,)).fetchone()
             if attempt and attempt["window_start"] > now - 900 and attempt["failures"] >= 5:
-                return render_template("settings.html", error="Too many attempts. Try again in 15 minutes."), 429
+                return render_template("settings.html", error="Too many attempts. Try again in 15 minutes.", verified_email=current_email()), 429
             current = request.form.get("current_password", "")
             new = request.form.get("new_password", "")
             confirm = request.form.get("confirm_password", "")
@@ -894,7 +1003,104 @@ def create_app(test_config=None):
                 session["auth_version"] = new_version
                 flash("Password changed. Other sessions have been signed out.", "success")
                 return redirect(url_for("settings"))
-        return render_template("settings.html", error=error), 400 if error else 200
+        return render_template("settings.html", error=error, verified_email=current_email()), 400 if error else 200
+
+    def current_email():
+        row = get_db().execute("SELECT email,email_verified_at FROM users WHERE id=?",
+                               (session["user_id"],)).fetchone()
+        return row["email"] if row["email_verified_at"] else None
+
+    @app.post("/settings/email")
+    @login_required
+    def settings_email():
+        if not app.config["EMAIL_ENABLED"]:
+            abort(404)
+        rate_limit("settings_email", str(session["user_id"]), 5, 3600)
+        try:
+            email = normalized_email(request.form.get("email", ""))
+        except ValueError as exc:
+            return render_template("settings.html", error=None, email_error=str(exc),
+                                   verified_email=current_email()), 400
+        db = get_db()
+        user = db.execute("SELECT password FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        if not check_password_hash(user["password"], request.form.get("current_password", "")):
+            return render_template("settings.html", error=None, email_error="Current password is incorrect.",
+                                   verified_email=current_email()), 400
+        owner = db.execute("SELECT id FROM users WHERE email=? COLLATE NOCASE", (email,)).fetchone()
+        if owner and owner["id"] != session["user_id"]:
+            return render_template("settings.html", error=None, email_error="Email address is already registered.",
+                                   verified_email=current_email()), 400
+        token = new_email_token(db, session["user_id"], email)
+        db.commit()
+        link = app.config["PUBLIC_BASE_URL"] + url_for("verify_email", token=token)
+        try:
+            send_account_email(app, email, "Verify your Expense Tracker email",
+                               f"Open this link to verify your email. It expires in 24 hours:\n{link}")
+        except EmailDeliveryError:
+            app.logger.exception("Settings verification email failed")
+            return render_template("settings.html", error=None,
+                                   email_error="Email could not be sent. Please try again later.",
+                                   verified_email=current_email()), 503
+        flash("Check your new email for a verification link.", "success")
+        return redirect(url_for("settings"))
+
+    @app.route("/verify-email/<token>", methods=["GET", "POST"])
+    def verify_email(token):
+        now = int(time.time())
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        db = get_db()
+        row = db.execute("""SELECT user_id,target_email FROM email_verification_tokens
+            WHERE token_hash=? AND used_at IS NULL AND expires_at>?""", (token_hash, now)).fetchone()
+        if row is None:
+            return render_template("verify_email.html", invalid=True), 400
+        if request.method == "POST":
+            try:
+                db.execute("BEGIN IMMEDIATE")
+                result = db.execute("""UPDATE email_verification_tokens SET used_at=?
+                    WHERE token_hash=? AND used_at IS NULL AND expires_at>?""", (now, token_hash, now))
+                if result.rowcount != 1:
+                    db.rollback()
+                    return render_template("verify_email.html", invalid=True), 400
+                db.execute("UPDATE users SET email=?,email_verified_at=? WHERE id=?",
+                           (row["target_email"], now, row["user_id"]))
+                db.execute("UPDATE email_verification_tokens SET used_at=? WHERE user_id=? AND used_at IS NULL",
+                           (now, row["user_id"]))
+                db.commit()
+            except sqlite3.IntegrityError:
+                db.rollback()
+                return render_template("verify_email.html", invalid=True), 400
+            flash("Email verified. You can sign in now.", "success")
+            return redirect(url_for("login"))
+        return render_template("verify_email.html", invalid=False, token=token)
+
+    @app.route("/verify-email/resend", methods=["GET", "POST"])
+    def resend_verification():
+        if not app.config["EMAIL_ENABLED"]:
+            abort(404)
+        if request.method == "POST":
+            rate_limit("verify_resend_ip", "", 5, 900)
+            email = request.form.get("email", "").strip()
+            try:
+                email = normalized_email(email)
+            except ValueError:
+                email = ""
+            if email:
+                rate_limit("verify_resend_address", email.casefold(), 3, 3600)
+                db = get_db()
+                user = db.execute("SELECT id FROM users WHERE email=? COLLATE NOCASE AND email_verified_at IS NULL",
+                                  (email,)).fetchone()
+                if user:
+                    token = new_email_token(db, user["id"], email)
+                    db.commit()
+                    link = app.config["PUBLIC_BASE_URL"] + url_for("verify_email", token=token)
+                    try:
+                        send_account_email(app, email, "Verify your Expense Tracker email",
+                                           f"Open this link to verify your email. It expires in 24 hours:\n{link}")
+                    except EmailDeliveryError:
+                        app.logger.exception("Verification resend failed")
+            flash("If this address has an unverified account, a new link has been sent.", "success")
+            return redirect(url_for("login"))
+        return render_template("resend_verification.html")
 
     @app.route("/reset-password/<token>", methods=["GET", "POST"])
     def password_reset(token):
@@ -935,7 +1141,29 @@ def create_app(test_config=None):
     @app.route("/forgot-password", methods=["GET", "POST"])
     def forgot_password():
         if request.method == "POST":
-            abort(403, "Self-service password reset is unavailable until verified email delivery is configured.")
+            if not app.config["EMAIL_ENABLED"]:
+                abort(403, "Self-service password reset is unavailable until verified email delivery is configured.")
+            rate_limit("reset_ip", "", 5, 900)
+            try:
+                email = normalized_email(request.form.get("email", ""))
+            except ValueError:
+                email = ""
+            if email:
+                rate_limit("reset_address", email.casefold(), 3, 3600)
+                db = get_db()
+                user = db.execute("SELECT id FROM users WHERE email=? COLLATE NOCASE AND email_verified_at IS NOT NULL",
+                                  (email,)).fetchone()
+                if user:
+                    token = new_reset_token(db, user["id"])
+                    db.commit()
+                    link = app.config["PUBLIC_BASE_URL"] + url_for("password_reset", token=token)
+                    try:
+                        send_account_email(app, email, "Reset your Expense Tracker password",
+                                           f"Open this link to reset your password. It expires in 15 minutes:\n{link}")
+                    except EmailDeliveryError:
+                        app.logger.exception("Password reset email failed")
+            flash("If this address has a verified account, a reset link has been sent.", "success")
+            return redirect(url_for("login"))
         return render_template("forgot_password.html")
 
     return app

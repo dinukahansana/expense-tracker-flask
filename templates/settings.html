@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Account Settings - Expense Tracker{% endblock %}
 {% block content %}
-<div class="form-page animate-in">
+<div class="form-page settings-page animate-in">
     <div class="form-card">
         <h1 class="form-card-title">Account Settings</h1>
         <p class="form-card-subtitle">Change your password while signed in.</p>
@@ -24,5 +24,24 @@
             <div class="form-actions"><button type="submit" class="btn btn-primary">Change Password</button></div>
         </form>
     </div>
+    {% if email_enabled %}
+    <div class="form-card">
+        <h2 class="form-card-title">Recovery email</h2>
+        <p class="form-card-subtitle">{% if verified_email %}Verified: {{ verified_email }}{% else %}No verified email yet.{% endif %}</p>
+        <form method="POST" action="{{ url_for('settings_email') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if email_error %}<p class="field-error" role="alert">{{ email_error }}</p>{% endif %}
+            <div class="form-group">
+                <label class="form-label" for="settings-email">New email address</label>
+                <input class="form-input" type="email" id="settings-email" name="email" required autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="settings-email-password">Current password</label>
+                <input class="form-input" type="password" id="settings-email-password" name="current_password" required autocomplete="current-password">
+            </div>
+            <div class="form-actions"><button type="submit" class="btn btn-primary">Send verification link</button></div>
+        </form>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

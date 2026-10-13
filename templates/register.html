@@ -37,6 +37,16 @@
             {% if errors.username %}<p class="field-error" role="alert">{{ errors.username }}</p>{% endif %}
         </div>
 
+        {% if email_enabled %}
+        <div class="form-group">
+            <label class="form-label" for="reg-email">Email address</label>
+            <input type="email" name="email" id="reg-email" class="form-input"
+                   value="{{ email }}" placeholder="you@example.com" required autocomplete="email">
+            <p class="form-hint">We will send a verification link before you can sign in.</p>
+            {% if errors.email %}<p class="field-error" role="alert">{{ errors.email }}</p>{% endif %}
+        </div>
+        {% endif %}
+
         <div class="form-group">
             <label class="form-label" for="reg-password">Password</label>
             <input
